@@ -1,0 +1,7 @@
+{
+    "python.analysis.extraPaths": [
+        "/home/aaa10/dev/sam3_project/sam3"
+    ],
+    "python.analysis.diagnosticMode": "workspace",
+    "python.analysis.typeCheckingMode": "basic"
+}
