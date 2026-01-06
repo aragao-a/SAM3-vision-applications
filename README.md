@@ -13,13 +13,23 @@ Implementation platforms:
 
 ## Features - Current and Potential
 
-### 1. Automatic Mask Extractor
+### 1. Automatic Mask Extractor - Scripts/mask-extractor.py
 A Tool that automates the process of isolating objects from background environments, with incredible precision
 
-- Processing: Local inference using SAM 3's unified checkpoint
+- Processing: Processing: Local inference using SAM 3's IMAGE Model
+- Input: any image, preferably .jpg or .jpeg
 - Output: Individual PNG files for each instance found, cropped to the object's bounding box
 
-### 2. Implementation Notebooks
+### 2. Transparent Video (.mov/.gif) generator - Scripts/frame-mask-extractor.py
+
+A Tool that automates the process of isolating video subjects from background environments
+
+- Processing: Local inference using SAM 3's IMAGE Model
+- Input: .mp4 video
+- Technique: ffmpeg retrieved frames which are individually applied to SAM3's image model, the subject is extracted and it then returns a folder of extracted .png frames, which are then used to compile a .mov video and a GIF also using ffmpeg
+- Output: A .mov and .gif file, both representing the transparent video after background removal
+
+### 3. Implementation Notebooks
 
 Jupyter Notebooks made by Meta
 
