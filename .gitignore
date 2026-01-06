@@ -68,6 +68,7 @@ instance/
 # Scrapy stuff:
 .scrapy
 
+materials/
 # Sphinx documentation
 docs/_build/
 
@@ -206,4 +207,7 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+video-mask-extractor.py
 commands.md
+assets
+proc_img_out
