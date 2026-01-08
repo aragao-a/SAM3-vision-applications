@@ -11,11 +11,11 @@ import shutil
 
 BASE_DIR = Path(__file__).resolve().parent
 MATERIALS_DIR = BASE_DIR / "materials"
-VIDEO_NAME = "out.mp4" 
+VIDEO_NAME = "backflip.mp4" 
 VIDEO_PATH = MATERIALS_DIR / VIDEO_NAME
 PROMPT_TEXT = "person" 
 
-SESSION_DIR = BASE_DIR / f"proc_img_{Path(VIDEO_NAME).stem}"
+SESSION_DIR = BASE_DIR / f"proc_img_out"
 FRAMES_DIR = SESSION_DIR / "frames"
 OUTPUT_FOLDER = SESSION_DIR / "transparent_pngs"
 FINAL_VIDEO = BASE_DIR / f"{Path(VIDEO_NAME).stem}_isolated.mov"
@@ -69,7 +69,7 @@ def process_video_frames():
                 print(f"Erro no frame {idx}: {e}")
                 continue
 
-PNG_FOLDER = BASE_DIR / "proc_img_out" / "transparent_pngs"
+PNG_FOLDER = BASE_DIR / f"proc_img_out" / "transparent_pngs"
 TEMP_SEQ = BASE_DIR / "temp_final_alpha"
 OUTPUT_VIDEO = BASE_DIR / "extracted_subject.mov"
 

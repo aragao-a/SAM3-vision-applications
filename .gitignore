@@ -210,4 +210,5 @@ __marimo__/
 video-mask-extractor.py
 commands.md
 assets
-proc_img_out
+proc_img_*
+results*
