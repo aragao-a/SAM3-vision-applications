@@ -29,7 +29,16 @@ A Tool that automates the process of isolating video subjects from background en
 - Technique: ffmpeg retrieved frames which are individually applied to SAM3's image model, the subject is extracted and it then returns a folder of extracted .png frames, which are then used to compile a .mov video and a GIF also using ffmpeg
 - Output: A .mov and .gif file, both representing the transparent video after background removal
 
-### 3. Implementation Notebooks
+### 3. Colored segments generator - Scripts/color-mask-extractor.py
+
+A Tool that segments in color groups of prompts and exports it as an .mp4 file
+
+- Processing: Local inference using SAM 3's IMAGE Model
+- Input: .mp4 video
+- Technique: ffmpeg retrieved frames which are individually applied to SAM3's image model, the subjects are segmented in color and then exported to a folder for a video via ffmpeg using the function in img-to-vid.py
+- Output: An .mp4 file with colored segments
+
+### 4. Implementation Notebooks
 
 Jupyter Notebooks made by Meta
 

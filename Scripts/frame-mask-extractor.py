@@ -20,29 +20,38 @@ FRAMES_DIR = SESSION_DIR / "frames"
 OUTPUT_FOLDER = SESSION_DIR / "transparent_pngs"
 FINAL_VIDEO = BASE_DIR / f"{Path(VIDEO_NAME).stem}_isolated.mov"
 
+def select_device():
+
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    else:
+        return "cpu"
+
 def setup_directories():
-    # if SESSION_DIR.exists():
-    #     print(f"Limpando sessão anterior em {SESSION_DIR}...")
-    #     shutil.rmtree(SESSION_DIR)
     
     FRAMES_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_FOLDER.mkdir(parents=True, exist_ok=True)
 
 def extract_frames():
-    print(f"Extraindo frames de {VIDEO_NAME}...")
+
     cmd = f"ffmpeg -i {VIDEO_PATH} -vf scale=1280:-1 -q:v 2 -start_number 0 {FRAMES_DIR}/%05d.jpg -y"
     subprocess.run(cmd, shell=True, check=True)
 
 def process_video_frames():
-    print("Inicializando SAM 3 Image")
+
+    device = select_device()
+
     model = build_sam3_image_model()
     processor = Sam3Processor(model)
 
     frame_files = sorted(list(FRAMES_DIR.glob("*.jpg")))
-    print(f"Processando {len(frame_files)} frames...")
 
-    with torch.autocast("cuda", dtype=torch.bfloat16):
+    with torch.autocast(device, dtype=torch.bfloat16):
+
         for idx, frame_path in enumerate(tqdm(frame_files)):
+            
             try:
                 image = Image.open(frame_path).convert("RGB")
                 img_np = np.array(image)
@@ -66,7 +75,6 @@ def process_video_frames():
                 del inference_state, output, masks, mask, alpha, rgba_img
 
             except Exception as e:
-                print(f"Erro no frame {idx}: {e}")
                 continue
 
 PNG_FOLDER = BASE_DIR / f"proc_img_out" / "transparent_pngs"
@@ -80,16 +88,12 @@ def assemble_video():
 
     png_files = sorted(list(PNG_FOLDER.glob("frame_*.png")))
     if not png_files:
-        print(f"ERRO: Nenhum PNG encontrado em {PNG_FOLDER}")
         return
 
     with Image.open(png_files[0]) as img:
-        print(f"-> Verificando {png_files[0].name} | Modo: {img.mode}")
         if img.mode != 'RGBA':
-            print("ERRO: Os PNGs não têm Alpha. O problema está no script de extração.")
             return
 
-    print("-> Criando sequência de frames limpa...")
     for i, file_path in enumerate(png_files):
         shutil.copy(file_path, TEMP_SEQ / f"frame_{i:05d}.png")
 
@@ -103,12 +107,10 @@ def assemble_video():
         str(OUTPUT_VIDEO), "-y"
     ]
 
-    print("-> Renderizando vídeo com codec PNG...")
     try:
         subprocess.run(cmd, check=True)
-        print(f"SUCESSO! Vídeo gerado em: {OUTPUT_VIDEO}")
     except subprocess.CalledProcessError as e:
-        print(f"ERRO NO FFMPEG: {e}")
+        print(f"Erro: {e}")
     finally:
         if TEMP_SEQ.exists(): shutil.rmtree(TEMP_SEQ)
 
@@ -135,10 +137,8 @@ def convert_to_final_gif():
 
     try:
         subprocess.run(cmd, check=True)
-        print(f"GIF gerado: {OUTPUT_GIF}")
     except Exception as e:
         print(f"Erro: {e}")
-
 
 if __name__ == "__main__":
     setup_directories()

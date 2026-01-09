@@ -9,9 +9,10 @@ from tqdm import tqdm
 import subprocess
 import shutil
 from datetime import datetime
+from img_to_vid import  concatenate_frames_to_video
 
 BASE_DIR = Path(__file__).resolve().parent
-VIDEO_NAME = "GT7-Medium30.mp4"
+VIDEO_NAME = "GT7-Easy1-30.mp4"
 VIDEO_PATH = BASE_DIR / "materials" / "1080p" / VIDEO_NAME
 
 RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -42,7 +43,6 @@ def setup_directories():
     SEGMENTED_DIR.mkdir(parents=True, exist_ok=True)
 
 def extract_frames():
-    print(f"-> Extraindo frames de {VIDEO_NAME}...")
     cmd = f"ffmpeg -i {VIDEO_PATH} -vf scale=1920:1080 -q:v 2 -start_number 0 {RAW_FRAMES_DIR}/frame_%05d.jpg -y"
     subprocess.run(cmd, shell=True, check=True)
 
@@ -52,14 +52,11 @@ def apply_overlay(frame, mask, color):
     return cv2.addWeighted(frame, 1.0 - OPACITY, overlay, OPACITY, 0)
 
 def process_and_colorize():
-    print("-> Inicializando SAM 3 Image Model (848M params)...")
     device = select_device()
     model = build_sam3_image_model()
     processor = Sam3Processor(model)
 
     frame_files = sorted(list(RAW_FRAMES_DIR.glob("*.jpg")))
-    print(f"-> Iniciando processamento de {len(frame_files)} frames...")
-
     with torch.autocast(device, dtype=torch.bfloat16):
         for idx, frame_path in enumerate(tqdm(frame_files)):
             try:
@@ -92,11 +89,11 @@ def process_and_colorize():
                 cv2.imwrite(str(out_filename), frame_cv)
 
             except Exception as e:
-                print(f"Erro no frame {idx}: {e}")
                 continue
 
 if __name__ == "__main__":
     setup_directories()
     extract_frames()
     process_and_colorize()
-    print(f"-> Processo concluído. Verifique a pasta: {SEGMENTED_DIR}")
+    concatenate_frames_to_video(RUN_ID)
+    print(f"Feito: {RUN_ID}")
