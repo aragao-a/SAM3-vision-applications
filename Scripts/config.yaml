@@ -1,0 +1,8 @@
+simulation:
+  video_name: "GT7-Easy1-30.mp4"
+  frame_snap_interval: 15
+  input_resolution: [1280, 720]
+
+model_params:
+  confidence_threshold: 0.5
+  sam_variant: "image"
