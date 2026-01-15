@@ -6,10 +6,10 @@ import ast
 import time
 import statistics
 import csv
+import argparse
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-import sys
 from PIL import Image
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
@@ -22,22 +22,12 @@ from img_to_vid import concatenate_frames_to_video
 
 BASE_DIR = Path(__file__).resolve().parent
 
-def resolve_resolution(config: Dict[str, Any]) -> Tuple[int, int]:
-    sim = config['simulation']
-    res_raw = sim['output_resolution']
-    final_res = (1340, 1786)
-    if isinstance(res_raw, str) and 'pixel7resolutions[' in res_raw:
-        try:
-            idx = int(res_raw.split('[')[1].split(']')[0])
-            res_val = sim['pixel7resolutions'][idx]
-            if isinstance(res_val, str):
-                res_val = ast.literal_eval(res_val)
-            return (int(res_val[1]), int(res_val[0]))
-        except (IndexError, ValueError, SyntaxError):
-            return final_res
-    if isinstance(res_raw, (list, tuple)) and len(res_raw) == 2:
-        return (int(res_raw[1]), int(res_raw[0]))
-    return final_res
+def get_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video", type=str, required=True)
+    parser.add_argument("--res", type=str, required=True)
+    parser.add_argument("--classes", type=str, required=True)
+    return parser.parse_args()
 
 def setup_directories(session_dir: Path):
     raw_dir = session_dir / "raw_frames"
@@ -50,7 +40,8 @@ def setup_directories(session_dir: Path):
 
 def extract_frames_at_res(video_path: Path, output_dir: Path, res: Tuple[int, int]):
     w, h = res
-    cmd = (f"ffmpeg -i {video_path} -vf scale={w}:{h} -q:v 2 "
+    # Adicionado setsar=1:1 para evitar erro de aspect ratio no MJPEG
+    cmd = (f"ffmpeg -i {video_path} -vf 'scale={w}:{h},setsar=1:1' -q:v 2 "
            f"-start_number 0 {output_dir}/frame_%05d.jpg -y")
     subprocess.run(cmd, shell=True, check=True)
 
@@ -76,7 +67,7 @@ def generate_visual_benchmarks(csv_path: Path, plots_dir: Path, run_id: str):
     plt.figure(figsize=(12, 6))
     plt.stackplot(df['frame_id'], df['visual_ms'], df['write_ms'], 
                   labels=['Overlay (CPU)', 'Gravação em Disco'], alpha=0.8, colors=['#81b1d3', '#fdb462'])
-    plt.title(f'Gargalos de Pós-processamento (CPU/Disco): {run_id}')
+    plt.title(f'Gargalos de Pós-processamento: {run_id}')
     plt.xlabel('ID do Frame')
     plt.ylabel('Tempo (ms)')
     plt.legend(loc='upper left')
@@ -86,7 +77,7 @@ def generate_visual_benchmarks(csv_path: Path, plots_dir: Path, run_id: str):
     plt.figure(figsize=(10, 6))
     sns.regplot(data=df, x='masks_count', y='decoder_ms', scatter_kws={'alpha':0.5}, line_kws={'color':'red'})
     plt.title(f'Impacto das Detecções no Decoder: {run_id}')
-    plt.xlabel('Número de Máscaras (Detecções)')
+    plt.xlabel('Número de Máscaras')
     plt.ylabel('Tempo de Decoder (ms)')
     plt.savefig(plots_dir / "masks_vs_decoder.png")
     plt.close()
@@ -94,7 +85,7 @@ def generate_visual_benchmarks(csv_path: Path, plots_dir: Path, run_id: str):
     plt.figure(figsize=(12, 6))
     sns.lineplot(data=df, x='frame_id', y='vram_mb', color='green', linewidth=2)
     plt.fill_between(df['frame_id'], df['vram_mb'], alpha=0.3, color='green')
-    plt.ylim(5400, 5800)
+    plt.ylim(5400, 5600)
     plt.title(f'Estabilidade de VRAM: {run_id}')
     plt.xlabel('ID do Frame')
     plt.ylabel('Uso de Memória (MB)')
@@ -102,6 +93,7 @@ def generate_visual_benchmarks(csv_path: Path, plots_dir: Path, run_id: str):
     plt.close()
 
 def run_task2_comprehensive():
+    args = get_args()
     log_buffer = []
 
     def log_print(msg):
@@ -112,49 +104,53 @@ def run_task2_comprehensive():
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    res = resolve_resolution(config)
+    res_parts = [int(x) for x in args.res.split(',')]
+    res = (res_parts[1], res_parts[0])
     height_val = res[1]
     res_str = f"{res[0]}x{res[1]}"
-    video_name = config['simulation']['video_name']
+    
+    video_name = args.video
     video_path = BASE_DIR / "materials" / "RayBanRatio" / "1x" / video_name
     video_stem = Path(video_name).stem
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    prompt_config = {
-        "car window": {"color": (0, 140, 255), "label": "Window"},
-        "tires": {"color": (255, 0, 0), "label": "Tire"},
-        "bumpers": {"color": (65, 169, 76), "label": "Bumper"},
+    full_prompt_map = {
+        "windows": {"car window": {"color": (0, 140, 255), "label": "Janela"}},
+        "tires": {"tires": {"color": (255, 0, 0), "label": "Pneu"}},
+        "bumpers": {"bumpers": {"color": (65, 169, 76), "label": "Para-choque"}}
     }
     
-    num_classes = len(prompt_config)
+    selected_classes = args.classes.split(',')
+    prompt_config = {}
+    for sc in selected_classes:
+        if sc in full_prompt_map:
+            prompt_config.update(full_prompt_map[sc])
+    
+    num_classes = len(selected_classes)
     run_id = f"{height_val}p_{num_classes}cl_{video_stem}_{run_timestamp}"
     session_dir = BASE_DIR / "proc_img_out" / run_id
     raw_frames_dir, segmented_dir, plots_dir = setup_directories(session_dir)
     
     extract_frames_at_res(video_path, raw_frames_dir, res)
     
-    log_print("- Inicializando GPU e Modelo SAM-3")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = build_sam3_image_model().to(device).eval()
     processor = Sam3Processor(model)
     
-    log_print("- Iniciando Warmup da GPU")
+    log_print(f"-> Warmup iniciado para {res_str}...")
     dummy_img = Image.fromarray(np.zeros((res[1], res[0], 3), dtype=np.uint8))
     with torch.no_grad(), torch.autocast(device, dtype=torch.bfloat16):
         d_state = processor.set_image(dummy_img)
         processor.set_text_prompt(state=d_state, prompt="warmup")
     if device == "cuda":
         torch.cuda.synchronize()
-    log_print("Warmup concluído. GPU pronta para benchmark.")
-
+    
     overall_start = time.time()
     mask_opacity = 0.4
     conf_threshold = config['model_params']['confidence_threshold']
     frame_paths = sorted(list(raw_frames_dir.glob("*.jpg")))
     
     benchmark_data = []
-
-    log_print(f"- Sessão Iniciada: {run_id} | Res: {res_str}")
 
     with torch.no_grad(), torch.autocast(device, dtype=torch.bfloat16):
         for idx, path in enumerate(frame_paths):
@@ -179,7 +175,6 @@ def run_task2_comprehensive():
                 
                 t_vis_sub = time.time()
                 masks, scores, boxes = output["masks"], output["scores"], output["boxes"]
-                
                 if masks is not None:
                     for i, m_tensor in enumerate(masks):
                         if scores[i].item() >= conf_threshold:
@@ -206,7 +201,6 @@ def run_task2_comprehensive():
                 "visual_ms": round(total_vis_ms, 2), "write_ms": round(write_ms, 2),
                 "vram_mb": round(vram_mb, 2), "masks_count": masks_in_frame
             })
-            
             log_print(f"[{out_filename}] Enc: {enc_ms:>6.2f}ms | Dec: {total_dec_ms:>6.2f}ms | Vis: {total_vis_ms:>6.2f}ms | Write: {write_ms:>6.2f}ms | VRAM: {vram_mb:>6.1f}MB | Masks: {masks_in_frame}")
 
     csv_path = session_dir / "benchmark_results.csv"
@@ -216,18 +210,17 @@ def run_task2_comprehensive():
         writer.writerows(benchmark_data)
 
     generate_visual_benchmarks(csv_path, plots_dir, run_id)
-    concatenate_frames_to_video(run_id)
+    #concatenate_frames_to_video(run_id)
     
     total_duration = time.time() - overall_start
-    
     enc_l = [d['encoder_ms'] for d in benchmark_data]
     dec_l = [d['decoder_ms'] for d in benchmark_data]
     vis_l = [d['visual_ms'] for d in benchmark_data]
     write_l = [d['write_ms'] for d in benchmark_data]
 
     log_print("\n" + "="*90)
-    log_print(f"{run_id}")
-    log_print(f"Tempo Total de Processamento: {total_duration / 60:.2f} minutos")
+    log_print(f"RESUMO DA SESSÃO: {run_id}")
+    log_print(f"Tempo Total: {total_duration / 60:.2f} minutos")
     log_print(f"Média Encoder: {statistics.mean(enc_l):.2f}ms (±{statistics.stdev(enc_l):.2f}ms)")
     log_print(f"Média Decoder: {statistics.mean(dec_l):.2f}ms (±{statistics.stdev(dec_l):.2f}ms)")
     log_print(f"Média Visual:  {statistics.mean(vis_l):.2f}ms (±{statistics.stdev(vis_l):.2f}ms)")
