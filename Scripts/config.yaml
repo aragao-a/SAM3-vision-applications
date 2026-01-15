@@ -1,7 +1,9 @@
+
 simulation:
   video_name: "GT7-Easy1-30.mp4"
   frame_snap_interval: 15
-  input_resolution: [1280, 720]
+  pixel7resolutions: [[3572, 2680], [1786, 1340], [894, 670], [447, 335]]
+  output_resolution: "pixel7resolutions[2]"
 
 model_params:
   confidence_threshold: 0.5

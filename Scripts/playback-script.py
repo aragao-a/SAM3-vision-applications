@@ -6,6 +6,7 @@ from pathlib import Path
 # Configuração de caminhos
 BASE_DIR = Path(__file__).resolve().parent
 MATERIALS_DIR = BASE_DIR / "materials" / "1080p"
+TARGET_RES = (1280, 720) # Downscale para 720p
 
 def load_config():
     with open(BASE_DIR / "config.yaml", "r") as f:
@@ -19,52 +20,39 @@ def start_live_simulation():
     cap = cv2.VideoCapture(str(video_path))
     
     if not cap.isOpened():
-        print(f"Erro: Não foi possível abrir o vídeo em {video_path}")
+        print(f"Erro: Não foi possível abrir o vídeo")
         return
 
-    # Obtendo metadados para simular o "tempo real" 
     fps = cap.get(cv2.CAP_PROP_FPS)
-    frame_time = 1.0 / fps # Tempo de espera entre frames em segundos
+    frame_time = 1.0 / fps
     
-    print(f"-> Simulando Playback: {sim_cfg['video_name']} ({fps} FPS)")
-    print(f"-> Snapshot a cada {sim_cfg['frame_snap_interval']} frames [cite: 11]")
+    print(f"-> Simulando Playback (720p): {sim_cfg['video_name']}")
 
     frame_idx = 0
     while cap.isOpened():
         start_time = time.time()
-        
         ret, frame = cap.read()
-        if not ret:
-            break
+        if not ret: break
 
-        # --- PARTE PARA MODIFICAÇÃO FUTURA (Task 2/Streaming) ---
-        # Aqui simularemos o downscale/upscale e a qualidade de streaming [cite: 10, 29]
-        # frame = cv2.resize(frame, tuple(sim_cfg['input_resolution'])) 
-        # --------------------------------------------------------
+        # APLICAÇÃO DO DOWNSCALE AUTOMÁTICO
+        frame = cv2.resize(frame, tuple(sim_cfg['output_resolution']), interpolation=cv2.INTER_AREA)
 
-        # Lógica de identificação de Snapshot [cite: 11]
         is_snapshot = (frame_idx % sim_cfg['frame_snap_interval'] == 0)
-        
-        # Feedback visual temporário para o Snapshot
         display_frame = frame.copy()
+        
         if is_snapshot:
-            # Desenha um indicador de "Captura" na tela
-            cv2.circle(display_frame, (50, 50), 20, (0, 255, 0), -1)
-            cv2.putText(display_frame, "SNAPSHOT", (80, 60), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            # Lógica de salvar snapshot (Task 1 original)
+            cv2.circle(display_frame, (40, 40), 15, (0, 255, 0), -1)
+            cv2.putText(display_frame, "SNAP", (65, 50), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
 
-        # Exibe o feed "ao vivo" em uma janela [cite: 20]
-        cv2.imshow("RayBan Meta - Live Simulation Feed", display_frame)
+        cv2.imshow("Live Feed - 720p View", display_frame)
 
-        # Controle de FPS: Garante que o vídeo não rode rápido demais 
         elapsed = time.time() - start_time
         sleep_time = max(1, int((frame_time - elapsed) * 1000))
-        
         frame_idx += 1
 
-        # Interromper com 'q'
-        if cv2.waitKey(sleep_time) & 0xFF == ord('q'):
-            break
+        if cv2.waitKey(sleep_time) & 0xFF == ord('q'): break
 
     cap.release()
     cv2.destroyAllWindows()
