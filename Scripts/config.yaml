@@ -1,6 +1,6 @@
 
 simulation:
-  video_name: "GT7-Easy1-30.mp4"
+  video_name: "GT7-Easy2-30.mp4"
   frame_snap_interval: 15
   pixel7resolutions: [[3572, 2680], [1786, 1340], [894, 670], [447, 335]]
   output_resolution: "pixel7resolutions[2]"

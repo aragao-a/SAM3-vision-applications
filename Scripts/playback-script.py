@@ -35,7 +35,7 @@ def start_live_simulation():
         if not ret: break
 
         # APLICAÇÃO DO DOWNSCALE AUTOMÁTICO
-        frame = cv2.resize(frame, tuple(sim_cfg['output_resolution']), interpolation=cv2.INTER_AREA)
+        frame = cv2.resize(frame, tuple([640, 480]), interpolation=cv2.INTER_AREA)
 
         is_snapshot = (frame_idx % sim_cfg['frame_snap_interval'] == 0)
         display_frame = frame.copy()

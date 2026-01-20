@@ -40,7 +40,6 @@ def setup_directories(session_dir: Path):
 
 def extract_frames_at_res(video_path: Path, output_dir: Path, res: Tuple[int, int]):
     w, h = res
-    # Adicionado setsar=1:1 para evitar erro de aspect ratio no MJPEG
     cmd = (f"ffmpeg -i {video_path} -vf 'scale={w}:{h},setsar=1:1' -q:v 2 "
            f"-start_number 0 {output_dir}/frame_%05d.jpg -y")
     subprocess.run(cmd, shell=True, check=True)
@@ -126,6 +125,8 @@ def run_task2_comprehensive():
         if sc in full_prompt_map:
             prompt_config.update(full_prompt_map[sc])
     
+    incidence_counts = {p_cfg["label"]: 0 for p_cfg in prompt_config.values()}
+    
     num_classes = len(selected_classes)
     run_id = f"{height_val}p_{num_classes}cl_{video_stem}_{run_timestamp}"
     session_dir = BASE_DIR / "proc_img_out" / run_id
@@ -137,7 +138,7 @@ def run_task2_comprehensive():
     model = build_sam3_image_model().to(device).eval()
     processor = Sam3Processor(model)
     
-    log_print(f"-> Warmup iniciado para {res_str}...")
+    log_print(f"Warmup iniciado para {res_str}")
     dummy_img = Image.fromarray(np.zeros((res[1], res[0], 3), dtype=np.uint8))
     with torch.no_grad(), torch.autocast(device, dtype=torch.bfloat16):
         d_state = processor.set_image(dummy_img)
@@ -179,6 +180,7 @@ def run_task2_comprehensive():
                     for i, m_tensor in enumerate(masks):
                         if scores[i].item() >= conf_threshold:
                             masks_in_frame += 1
+                            incidence_counts[p_cfg["label"]] += 1
                             m_np = m_tensor.cpu().numpy().squeeze()
                             frame_bgr = apply_overlay(frame_bgr, m_np, p_cfg["color"], mask_opacity)
                             if boxes is not None:
@@ -210,7 +212,6 @@ def run_task2_comprehensive():
         writer.writerows(benchmark_data)
 
     generate_visual_benchmarks(csv_path, plots_dir, run_id)
-    #concatenate_frames_to_video(run_id)
     
     total_duration = time.time() - overall_start
     enc_l = [d['encoder_ms'] for d in benchmark_data]
@@ -219,12 +220,14 @@ def run_task2_comprehensive():
     write_l = [d['write_ms'] for d in benchmark_data]
 
     log_print("\n" + "="*90)
-    log_print(f"RESUMO DA SESSÃO: {run_id}")
     log_print(f"Tempo Total: {total_duration / 60:.2f} minutos")
     log_print(f"Média Encoder: {statistics.mean(enc_l):.2f}ms (±{statistics.stdev(enc_l):.2f}ms)")
     log_print(f"Média Decoder: {statistics.mean(dec_l):.2f}ms (±{statistics.stdev(dec_l):.2f}ms)")
     log_print(f"Média Visual:  {statistics.mean(vis_l):.2f}ms (±{statistics.stdev(vis_l):.2f}ms)")
     log_print(f"Média Escrita: {statistics.mean(write_l):.2f}ms (±{statistics.stdev(write_l):.2f}ms)")
+    log_print(f"Total de Mascaras Geradas: {sum(incidence_counts.values())}")
+    for label, count in incidence_counts.items():
+        log_print(f"Incidencia {label}: {count} deteccoes")
     log_print("="*90)
 
     with open(session_dir / "session_log.txt", "w") as f:
