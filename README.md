@@ -38,9 +38,20 @@ A Tool that segments in color groups of prompts and exports it as an .mp4 file
 - Technique: ffmpeg retrieved frames which are individually applied to SAM3's image model, the subjects are segmented in color and then exported to a folder for a video via ffmpeg using the function in img-to-vid.py
 - Output: An .mp4 file with colored segments
 
-### 4. Implementation Notebooks
+### 4. Benchmark Script - Scripts/bench-color-extractor.py
 
-Jupyter Notebooks made by Meta
+- Input: config.yaml in setup for what you wish to be segmented to video and benchmarked:
+
+
+simulation:
+  video_name: "GT7-Easy1-30.mp4"
+  frame_snap_interval: 15
+  pixel7resolutions: [[3572, 2680], [1786, 1340], [894, 670], [447, 335]]
+  output_resolution: "pixel7resolutions[2]"
+
+model_params:
+  confidence_threshold: 0.5
+  sam_variant: "image"
 
 ## Usage
 
