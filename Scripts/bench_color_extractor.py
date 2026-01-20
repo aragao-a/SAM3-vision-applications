@@ -23,23 +23,33 @@ from img_to_vid import concatenate_frames_to_video
 BASE_DIR = Path(__file__).resolve().parent
 
 def resolve_resolution(config: Dict[str, Any]) -> Tuple[int, int]:
+
     sim = config['simulation']
     res_raw = sim['output_resolution']
     final_res = (1340, 1786)
+
     if isinstance(res_raw, str) and 'pixel7resolutions[' in res_raw:
+
         try:
+
             idx = int(res_raw.split('[')[1].split(']')[0])
             res_val = sim['pixel7resolutions'][idx]
+
             if isinstance(res_val, str):
+
                 res_val = ast.literal_eval(res_val)
             return (int(res_val[1]), int(res_val[0]))
+        
         except (IndexError, ValueError, SyntaxError):
             return final_res
+        
     if isinstance(res_raw, (list, tuple)) and len(res_raw) == 2:
         return (int(res_raw[1]), int(res_raw[0]))
+    
     return final_res
 
 def setup_directories(session_dir: Path):
+
     raw_dir = session_dir / "raw_frames"
     seg_dir = session_dir / "segmented_frames"
     plots_dir = session_dir / "plots"
@@ -49,59 +59,15 @@ def setup_directories(session_dir: Path):
     return raw_dir, seg_dir, plots_dir
 
 def extract_frames_at_res(video_path: Path, output_dir: Path, res: Tuple[int, int]):
+
     w, h = res
+
     cmd = (f"ffmpeg -i {video_path} -vf scale={w}:{h} -q:v 2 "
            f"-start_number 0 {output_dir}/frame_%05d.jpg -y")
     subprocess.run(cmd, shell=True, check=True)
 
-def apply_overlay(frame, mask, color, opacity):
-    overlay = frame.copy()
-    overlay[mask > 0] = color
-    return cv2.addWeighted(frame, 1.0 - opacity, overlay, opacity, 0)
+def run_benchmark():
 
-def generate_visual_benchmarks(csv_path: Path, plots_dir: Path, run_id: str):
-    df = pd.read_csv(csv_path)
-    sns.set_theme(style="whitegrid")
-    
-    plt.figure(figsize=(12, 6))
-    plt.stackplot(df['frame_id'], df['encoder_ms'], df['decoder_ms'], df['visual_ms'], df['write_ms'], 
-                  labels=['Encoder (GPU)', 'Decoder (GPU)', 'Overlay (CPU)', 'Gravação em Disco'], alpha=0.8)
-    plt.title(f'Análise de Latência Completa: {run_id}')
-    plt.xlabel('ID do Frame')
-    plt.ylabel('Tempo (ms)')
-    plt.legend(loc='upper left')
-    plt.savefig(plots_dir / "latency_breakdown.png")
-    plt.close()
-
-    plt.figure(figsize=(12, 6))
-    plt.stackplot(df['frame_id'], df['visual_ms'], df['write_ms'], 
-                  labels=['Overlay (CPU)', 'Gravação em Disco'], alpha=0.8, colors=['#81b1d3', '#fdb462'])
-    plt.title(f'Gargalos de Pós-processamento (CPU/Disco): {run_id}')
-    plt.xlabel('ID do Frame')
-    plt.ylabel('Tempo (ms)')
-    plt.legend(loc='upper left')
-    plt.savefig(plots_dir / "latency_overhead_isolated.png")
-    plt.close()
-
-    plt.figure(figsize=(10, 6))
-    sns.regplot(data=df, x='masks_count', y='decoder_ms', scatter_kws={'alpha':0.5}, line_kws={'color':'red'})
-    plt.title(f'Impacto das Detecções no Decoder: {run_id}')
-    plt.xlabel('Número de Máscaras (Detecções)')
-    plt.ylabel('Tempo de Decoder (ms)')
-    plt.savefig(plots_dir / "masks_vs_decoder.png")
-    plt.close()
-
-    plt.figure(figsize=(12, 6))
-    sns.lineplot(data=df, x='frame_id', y='vram_mb', color='green', linewidth=2)
-    plt.fill_between(df['frame_id'], df['vram_mb'], alpha=0.3, color='green')
-    plt.ylim(5400, 5800)
-    plt.title(f'Estabilidade de VRAM: {run_id}')
-    plt.xlabel('ID do Frame')
-    plt.ylabel('Uso de Memória (MB)')
-    plt.savefig(plots_dir / "vram_stability.png")
-    plt.close()
-
-def run_task2_comprehensive():
     log_buffer = []
 
     def log_print(msg):
@@ -140,10 +106,13 @@ def run_task2_comprehensive():
     
     log_print("- Iniciando Warmup da GPU")
     dummy_img = Image.fromarray(np.zeros((res[1], res[0], 3), dtype=np.uint8))
+
     with torch.no_grad(), torch.autocast(device, dtype=torch.bfloat16):
+
         d_state = processor.set_image(dummy_img)
         processor.set_text_prompt(state=d_state, prompt="warmup")
     if device == "cuda":
+
         torch.cuda.synchronize()
     log_print("Warmup concluído. GPU pronta para benchmark.")
 
@@ -157,7 +126,9 @@ def run_task2_comprehensive():
     log_print(f"- Sessão Iniciada: {run_id} | Res: {res_str}")
 
     with torch.no_grad(), torch.autocast(device, dtype=torch.bfloat16):
+
         for idx, path in enumerate(frame_paths):
+
             if device == "cuda":
                 torch.cuda.reset_peak_memory_stats()
             
@@ -173,6 +144,7 @@ def run_task2_comprehensive():
             total_vis_ms = 0
 
             for prompt_text, p_cfg in prompt_config.items():
+
                 t_dec_sub = time.time()
                 output = processor.set_text_prompt(state=state, prompt=prompt_text)
                 total_dec_ms += (time.time() - t_dec_sub) * 1000
@@ -181,15 +153,21 @@ def run_task2_comprehensive():
                 masks, scores, boxes = output["masks"], output["scores"], output["boxes"]
                 
                 if masks is not None:
+
                     for i, m_tensor in enumerate(masks):
+
                         if scores[i].item() >= conf_threshold:
+
                             masks_in_frame += 1
                             m_np = m_tensor.cpu().numpy().squeeze()
                             frame_bgr = apply_overlay(frame_bgr, m_np, p_cfg["color"], mask_opacity)
+
                             if boxes is not None:
+
                                 box = boxes[i].cpu().numpy().astype(int)
                                 cv2.putText(frame_bgr, p_cfg["label"], (box[0], box[1] - 10), 
                                             cv2.FONT_HERSHEY_SIMPLEX, 0.7, p_cfg["color"], 2)
+                                
                 total_vis_ms += (time.time() - t_vis_sub) * 1000
             
             t_start_write = time.time()
@@ -237,5 +215,55 @@ def run_task2_comprehensive():
     with open(session_dir / "session_log.txt", "w") as f:
         f.write("\n".join(log_buffer))
 
+def apply_overlay(frame, mask, color, opacity):
+
+    overlay = frame.copy()
+    overlay[mask > 0] = color
+    return cv2.addWeighted(frame, 1.0 - opacity, overlay, opacity, 0)
+
+def generate_visual_benchmarks(csv_path: Path, plots_dir: Path, run_id: str):
+
+    df = pd.read_csv(csv_path)
+    sns.set_theme(style="whitegrid")
+    
+    plt.figure(figsize=(12, 6))
+    plt.stackplot(df['frame_id'], df['encoder_ms'], df['decoder_ms'], df['visual_ms'], df['write_ms'], 
+                  labels=['Encoder (GPU)', 'Decoder (GPU)', 'Overlay (CPU)', 'Gravação em Disco'], alpha=0.8)
+    plt.title(f'Análise de Latência Completa: {run_id}')
+    plt.xlabel('ID do Frame')
+    plt.ylabel('Tempo (ms)')
+    plt.legend(loc='upper left')
+    plt.savefig(plots_dir / "latency_breakdown.png")
+    plt.close()
+
+    plt.figure(figsize=(12, 6))
+    plt.stackplot(df['frame_id'], df['visual_ms'], df['write_ms'], 
+                  labels=['Overlay (CPU)', 'Gravação em Disco'], alpha=0.8, colors=['#81b1d3', '#fdb462'])
+    plt.title(f'Gargalos de Pós-processamento (CPU/Disco): {run_id}')
+    plt.xlabel('ID do Frame')
+    plt.ylabel('Tempo (ms)')
+    plt.legend(loc='upper left')
+    plt.savefig(plots_dir / "latency_overhead_isolated.png")
+    plt.close()
+
+    plt.figure(figsize=(10, 6))
+    sns.regplot(data=df, x='masks_count', y='decoder_ms', scatter_kws={'alpha':0.5}, line_kws={'color':'red'})
+    plt.title(f'Impacto das Detecções no Decoder: {run_id}')
+    plt.xlabel('Número de Máscaras (Detecções)')
+    plt.ylabel('Tempo de Decoder (ms)')
+    plt.savefig(plots_dir / "masks_vs_decoder.png")
+    plt.close()
+
+    plt.figure(figsize=(12, 6))
+    sns.lineplot(data=df, x='frame_id', y='vram_mb', color='green', linewidth=2)
+    plt.fill_between(df['frame_id'], df['vram_mb'], alpha=0.3, color='green')
+    plt.ylim(5400, 5800)
+    plt.title(f'Estabilidade de VRAM: {run_id}')
+    plt.xlabel('ID do Frame')
+    plt.ylabel('Uso de Memória (MB)')
+    plt.savefig(plots_dir / "vram_stability.png")
+    plt.close()
+
 if __name__ == "__main__":
-    run_task2_comprehensive()
+    
+    run_benchmark()
